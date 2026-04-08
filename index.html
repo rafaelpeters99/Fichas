@@ -105,6 +105,13 @@
             );
         };
 
+        // Função de cálculo de modificador (Bónus)
+        const getMod = (val) => {
+            const v = Number(val) || 10;
+            const mod = Math.floor((v - 10) / 2);
+            return mod >= 0 ? `+${mod}` : mod.toString();
+        };
+
         function App() {
             const [nickname, setNickname] = useState(localStorage.getItem('rpg_nickname') || "");
             const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('rpg_nickname'));
@@ -196,24 +203,26 @@
                 broadcastData(newList);
             };
 
-            // Filtragem: Jogadores não vêm personagens ocultos
             const visibleCharacters = useMemo(() => {
                 if (role === 'gm') return characters;
-                return characters.filter(c => !c.isHidden);
-            }, [characters, role]);
+                return characters.filter(c => {
+                    const isOwner = c.ownerNickname?.toLowerCase().trim() === nickname.toLowerCase().trim();
+                    return !c.isHidden || isOwner;
+                });
+            }, [characters, role, nickname]);
 
             const selectedStoryChar = useMemo(() => characters.find(c => c.id === storyCharId), [characters, storyCharId]);
 
             if (!isLoggedIn) {
                 return (
-                    <div className="min-h-screen flex items-center justify-center p-6 animate-in">
+                    <div className="min-h-screen flex items-center justify-center p-6 animate-in text-white">
                         <div className="glass-panel p-10 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl">
                             <Icon name="shield" size={48} className="text-orange-500 mb-6 mx-auto" />
-                            <h1 className="text-4xl font-magic font-black uppercase mb-10 text-white leading-none">Grimoire</h1>
+                            <h1 className="text-4xl font-magic font-black uppercase mb-10 leading-none text-white">Grimoire</h1>
                             {!showGmLogin ? (
-                                <form onSubmit={(e) => { e.preventDefault(); if(nickname.trim()){ localStorage.setItem('rpg_nickname', nickname); setIsLoggedIn(true); } }} className="space-y-6">
+                                <form onSubmit={(e) => { e.preventDefault(); if(nickname.trim()){ localStorage.setItem('rpg_nickname', nickname.trim()); setIsLoggedIn(true); } }} className="space-y-6">
                                     <input type="text" value={nickname} onChange={e => setNickname(e.target.value)} placeholder="Teu Nickname" className="input-hero py-4 text-center font-bold" />
-                                    <button className="w-full bg-orange-600 p-4 rounded-xl font-black uppercase text-sm shadow-lg hover:bg-orange-500">Entrar</button>
+                                    <button className="w-full bg-orange-600 p-4 rounded-xl font-black uppercase text-sm shadow-lg hover:bg-orange-500 transition-all">Entrar</button>
                                     <button type="button" onClick={() => setShowGmLogin(true)} className="text-slate-500 text-xs font-bold uppercase mt-4">Painel Mestre</button>
                                 </form>
                             ) : (
@@ -230,10 +239,10 @@
 
             if (!inRoom) {
                 return (
-                    <div className="max-w-[500px] mx-auto p-10 min-h-screen flex flex-col justify-center animate-in">
+                    <div className="max-w-[500px] mx-auto p-10 min-h-screen flex flex-col justify-center animate-in text-white">
                         <h1 className="text-4xl font-magic font-black uppercase text-white mb-10 text-center tracking-widest">Salas</h1>
                         <div className="glass-panel p-8 rounded-3xl space-y-6">
-                            <input type="text" value={roomName} onChange={e => setRoomName(e.target.value)} placeholder="Identificador da Mesa" className="input-hero py-4 text-center text-lg font-bold" />
+                            <input type="text" value={roomName} onChange={e => setRoomName(e.target.value)} placeholder="Identificador da Mesa" className="input-hero py-4 text-center text-lg font-bold uppercase" />
                             {role === 'gm' ? (
                                 <button onClick={startRoomAsMaster} className="w-full bg-orange-600 p-4 rounded-xl font-black uppercase text-xs">Forjar Sala</button>
                             ) : (
@@ -247,28 +256,28 @@
             return (
                 <div className="max-w-[1600px] mx-auto p-4 md:p-12 animate-in min-h-screen">
                     <header className="flex justify-between items-center mb-16">
-                        <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-6 leading-none">
                             <Icon name="shield" size={32} className="text-orange-500" />
-                            <div><h1 className="text-3xl font-magic font-black uppercase leading-none">{roomName}</h1><p className="text-[10px] uppercase text-slate-500 mt-1 italic tracking-widest">{nickname}</p></div>
+                            <div><h1 className="text-3xl font-magic font-black uppercase leading-none text-white">{roomName}</h1><p className="text-[10px] uppercase text-slate-500 mt-1 italic tracking-widest leading-none">{nickname}</p></div>
                         </div>
-                        <button onClick={() => window.location.reload()} className="p-4 glass-panel rounded-xl text-slate-500 hover:text-red-500 transition-all font-black text-[10px] uppercase">Sair</button>
+                        <button onClick={() => window.location.reload()} className="p-4 glass-panel rounded-xl text-slate-500 hover:text-red-500 transition-all font-black text-[10px] uppercase">Sair da Sala</button>
                     </header>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 pb-20">
                         {visibleCharacters.map(char => {
-                            const isOwner = char.ownerNickname?.toLowerCase() === nickname.toLowerCase();
+                            const isOwner = char.ownerNickname?.toLowerCase().trim() === nickname.toLowerCase().trim();
                             const hasAccess = isOwner || role === 'gm';
                             const isExpanded = expandedCards[char.id];
                             return (
-                                <div key={char.id} className={`glass-panel rounded-[3rem] border-2 ${char.isHidden ? 'opacity-40 grayscale border-purple-500/20' : isOwner ? 'border-orange-500/30' : 'border-transparent'} flex flex-col shadow-2xl transition-all relative z-10 hover:z-30`}>
+                                <div key={char.id} className={`glass-panel rounded-[3rem] border-2 ${char.isHidden ? 'opacity-50 border-purple-500/20' : isOwner ? 'border-orange-500/30' : 'border-transparent'} flex flex-col shadow-2xl transition-all relative z-10 hover:z-30`}>
                                     
                                     <div className="photo-container relative h-64 hover:h-auto hover:aspect-square bg-slate-950 overflow-hidden rounded-t-[3rem] border-b border-white/5 group/photo">
-                                        {char.imageUrl ? <img src={char.imageUrl} className="w-full h-full object-cover" /> : <div className="h-full flex items-center justify-center opacity-10"><Icon name="user" size={64} /></div>}
+                                        {char.imageUrl ? <img src={char.imageUrl} className="w-full h-full object-cover" /> : <div className="h-full flex items-center justify-center opacity-10"><Icon name="user" size={64} className="text-white"/></div>}
                                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent group-hover/photo:opacity-0 transition-opacity"></div>
                                         
                                         <div className="absolute top-4 left-4 flex gap-2 pointer-events-none">
-                                            {isOwner && <div className="bg-orange-500 text-slate-950 font-black px-3 py-1 rounded-full text-[8px] uppercase">MEU HERÓI</div>}
-                                            {char.isHidden && <div className="bg-purple-600 text-white font-black px-3 py-1 rounded-full text-[8px] uppercase">OCULTO</div>}
+                                            {isOwner && <div className="bg-orange-500 text-slate-950 font-black px-3 py-1 rounded-full text-[8px] uppercase tracking-widest shadow-lg">MEU HERÓI</div>}
+                                            {char.isHidden && <div className="bg-purple-600 text-white font-black px-3 py-1 rounded-full text-[8px] uppercase tracking-widest shadow-lg">OCULTO</div>}
                                         </div>
 
                                         {hasAccess && (
@@ -286,12 +295,12 @@
                                             </div>
                                             <div className="flex gap-2">
                                                 {role === 'gm' && (
-                                                    <button onClick={() => toggleVisibility(char.id)} title={char.isHidden ? "Mostrar" : "Ocultar"} className={`p-3 rounded-xl border transition-all ${char.isHidden ? 'bg-purple-900/40 border-purple-500/30 text-purple-400' : 'glass-panel text-slate-400 hover:text-white'}`}>
+                                                    <button onClick={() => toggleVisibility(char.id)} title={char.isHidden ? "Mostrar para todos" : "Ocultar dos outros"} className={`p-3 rounded-xl border transition-all ${char.isHidden ? 'bg-purple-900/40 border-purple-500/30 text-purple-400' : 'glass-panel text-slate-400 hover:text-white'}`}>
                                                         <Icon name={char.isHidden ? "eye-off" : "eye"} size={18} />
                                                     </button>
                                                 )}
-                                                {hasAccess && <button onClick={() => { setEditingId(char.id); setFormData(char); }} className="p-3 glass-panel rounded-xl text-orange-500 hover:bg-orange-500/10"><Icon name="edit-3" size={18}/></button>}
-                                                {role === 'gm' && <button onClick={() => deleteChar(char.id)} className="p-3 glass-panel rounded-xl text-red-500 hover:bg-red-500/10"><Icon name="trash-2" size={18}/></button>}
+                                                {hasAccess && <button onClick={() => { setEditingId(char.id); setFormData(char); }} className="p-3 glass-panel rounded-xl text-orange-500 hover:bg-orange-500/10 transition-colors shadow-inner"><Icon name="edit-3" size={18}/></button>}
+                                                {role === 'gm' && <button onClick={() => deleteChar(char.id)} className="p-3 glass-panel rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"><Icon name="trash-2" size={18}/></button>}
                                             </div>
                                         </div>
                                         
@@ -302,12 +311,21 @@
                                         
                                         {hasAccess && (
                                             <div className="space-y-6">
-                                                <div className="grid grid-cols-6 gap-2">
-                                                    {['str','dex','con','int','wis','cha'].map(a => (<div key={a} className="glass-panel py-3 rounded-2xl text-center group hover:border-orange-500/30 transition-all leading-none"><div className="text-[8px] text-slate-600 uppercase mb-1 font-black group-hover:text-orange-500 leading-none">{a}</div><div className="text-xl font-magic font-black text-white leading-none">{char[a] || 10}</div></div>))}
+                                                {/* GRID ATRIBUTOS COM BÓNUS */}
+                                                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                                                    {['str','dex','con','int','wis','cha'].map(a => (
+                                                        <div key={a} className="glass-panel py-3 rounded-2xl text-center group hover:border-orange-500/30 transition-all leading-none border-white/5">
+                                                            <div className="text-[8px] text-slate-600 uppercase mb-1 font-black group-hover:text-orange-500 leading-none italic">{a}</div>
+                                                            <div className="text-xl font-magic font-black text-white leading-none mb-1">{char[a] || 10}</div>
+                                                            <div className="text-[10px] font-black text-orange-500/60 font-serif leading-none italic">{getMod(char[a])}</div>
+                                                        </div>
+                                                    ))}
                                                 </div>
+
                                                 <button onClick={() => setExpandedCards(p => ({...p, [char.id]: !p[char.id]}))} className={`w-full p-4 rounded-2xl font-magic font-black uppercase text-[9px] tracking-[0.3em] transition-all flex justify-between items-center ${isExpanded ? 'bg-orange-600 text-white shadow-xl shadow-orange-900/20' : 'glass-panel text-slate-500'}`}>
                                                     <span>Inventário & Saberes</span> <span>{isExpanded ? '▲' : '▼'}</span>
                                                 </button>
+                                                
                                                 {isExpanded && (
                                                     <div className="grid grid-cols-1 gap-6 animate-in">
                                                         <div className="glass-panel p-6 rounded-2xl bg-slate-900/40 text-left">
@@ -320,7 +338,7 @@
                                                         </div>
                                                         <div className="space-y-4"><ListBlock title="Perícias" content={char.skills} /> <ListBlock title="Habilidades" content={char.abilities} /></div>
                                                         <div className="glass-panel p-6 rounded-2xl border-white/5 text-left bg-slate-950/20">
-                                                            <h4 className="text-[9px] font-black text-orange-500 uppercase mb-3 italic leading-none font-magic"><Icon name="package" size={14} className="inline mr-1" /> Mochila</h4>
+                                                            <h4 className="text-[9px] font-black text-orange-500 uppercase mb-3 italic leading-none font-magic text-white"><Icon name="package" size={14} className="inline mr-1" /> Mochila</h4>
                                                             <p className="text-xs text-slate-400 italic break-words leading-relaxed">{char.inventory || "Vazio."}</p>
                                                         </div>
                                                     </div>
@@ -331,19 +349,19 @@
                                 </div>
                             );
                         })}
-                        <button onClick={() => { setFormData({ name: "", hp: 10, hpMax: 10, slots: 2, slotsMax: 2, str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, level: 1, ownerNickname: role === 'gm' ? "" : nickname, isHidden: false, history: "", skills: "", abilities: "", inventory: "", weapon: "", armor: "", accessory: "", imageUrl: "" }); setEditingId('new'); }} className="glass-panel border-dashed border-2 border-slate-800 rounded-[3rem] p-20 flex flex-col items-center justify-center gap-4 text-slate-700 hover:text-orange-500 hover:border-orange-500/40 transition-all group">
+                        <button onClick={() => { setFormData({ name: "", hp: 10, hpMax: 10, slots: 2, slotsMax: 2, str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, level: 1, ownerNickname: role === 'gm' ? "" : nickname, isHidden: false, history: "", skills: "", abilities: "", inventory: "", weapon: "", armor: "", accessory: "", imageUrl: "" }); setEditingId('new'); }} className="glass-panel border-dashed border-2 border-slate-800 rounded-[3rem] p-20 flex flex-col items-center justify-center gap-4 text-slate-700 hover:text-orange-500 hover:border-orange-500/40 transition-all group min-h-[300px]">
                             <Icon name="plus" size={48} />
-                            <span className="font-magic uppercase font-black text-xs tracking-widest italic">Invocar Viajante</span>
+                            <span className="font-magic uppercase font-black text-xs tracking-widest italic leading-none">Invocar Viajante</span>
                         </button>
                     </div>
 
                     {/* MODAL HISTÓRIA */}
                     {selectedStoryChar && (
-                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[2000] flex items-center justify-center p-4" onClick={()=>setStoryCharId(null)}>
+                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[2000] flex items-center justify-center p-4 text-white" onClick={()=>setStoryCharId(null)}>
                             <div className="bg-slate-900 border border-white/10 w-full max-w-2xl rounded-3xl p-8 lg:p-12 relative shadow-2xl animate-in" onClick={e=>e.stopPropagation()}>
                                 <button onClick={() => setStoryCharId(null)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><Icon name="x" size={24}/></button>
-                                <h2 className="text-3xl font-black font-magic text-white uppercase mb-8 border-b border-white/5 pb-6">Crónica: {selectedStoryChar.name}</h2>
-                                <div className="text-slate-300 italic font-serif leading-loose text-lg whitespace-pre-wrap max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar break-words">{selectedStoryChar.history || "História nula."}</div>
+                                <h2 className="text-3xl font-black font-magic text-white uppercase mb-8 border-b border-white/5 pb-6 leading-none">Crónica: {selectedStoryChar.name}</h2>
+                                <div className="text-slate-300 italic font-serif leading-loose text-lg whitespace-pre-wrap max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar break-words leading-relaxed">{selectedStoryChar.history || "História nula."}</div>
                             </div>
                         </div>
                     )}
@@ -351,15 +369,15 @@
                     {/* EDITOR */}
                     {editingId && formData && (
                         <div className="editor-overlay">
-                            <div className="editor-content glass-panel animate-in">
-                                <div className="p-5 border-b border-white/10 flex justify-between items-center bg-slate-900/80 shadow-xl leading-none">
+                            <div className="editor-content glass-panel animate-in text-white border-white/5">
+                                <div className="p-5 border-b border-white/10 flex justify-between items-center bg-slate-950/80 shadow-xl leading-none">
                                     <div className="flex items-center gap-3 text-orange-500 font-magic italic leading-none"><Icon name="shield" size={24}/><h2 className="text-xl uppercase tracking-tighter">Forjar Destino</h2></div>
-                                    <button onClick={() => setEditingId(null)} className="p-2 text-slate-400 hover:text-white"><Icon name="x" size={24}/></button>
+                                    <button onClick={() => setEditingId(null)} className="p-2 text-slate-400 hover:text-white transition-colors"><Icon name="x" size={24}/></button>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#020617]/50 text-white">
                                     <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
                                         <div className="md:col-span-4 space-y-6 text-left">
-                                            <div className="space-y-1.5"><label className="text-[10px] uppercase text-slate-500 font-bold ml-1 italic">Identidade</label><input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input-hero text-lg font-magic uppercase text-orange-500" /></div>
+                                            <div className="space-y-1.5"><label className="text-[10px] uppercase text-slate-500 font-bold ml-1 italic leading-none">Identidade</label><input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input-hero text-lg font-magic uppercase text-orange-500" /></div>
                                             <label className="flex flex-col items-center justify-center h-48 bg-slate-950 border-2 border-dashed border-slate-800 rounded-xl cursor-pointer overflow-hidden relative">
                                                 {formData.imageUrl ? <img src={formData.imageUrl} className="w-full h-full object-cover" /> : <div className="text-slate-800 opacity-30"><Icon name="user" size={40}/></div>}
                                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => {
@@ -370,17 +388,17 @@
                                                             const canvas = document.createElement('canvas'); canvas.width = 500; canvas.height = 500; 
                                                             const ctx = canvas.getContext('2d'); const min = Math.min(img.width, img.height);
                                                             ctx.drawImage(img, (img.width-min)/2, (img.height-min)/2, min, min, 0, 0, 500, 500);
-                                                            setFormData(prev => ({ ...prev, imageUrl: canvas.toDataURL('image/jpeg', 0.6) }));
+                                                            setFormData(prev => ({ ...prev, imageUrl: canvas.toDataURL('image/jpeg', 0.5) }));
                                                         }; img.src = ev.target.result;
                                                     }; reader.readAsDataURL(file);
                                                 }}/>
                                             </label>
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1.5"><label className="text-[8px] uppercase text-slate-600 font-bold">Nível</label><input type="number" value={formData.level} onChange={e => setFormData({...formData, level: Number(e.target.value)})} className="input-hero font-bold" /></div>
-                                                <div className="space-y-1.5"><label className="text-[8px] uppercase text-slate-600 font-bold">Dono</label><input type="text" disabled={role !== 'gm'} value={formData.ownerNickname} onChange={e => setFormData({...formData, ownerNickname: e.target.value})} className="input-hero text-[10px] text-orange-500 uppercase font-black" /></div>
+                                                <div className="space-y-1.5 text-left leading-none"><label className="text-[8px] uppercase text-slate-600 font-bold leading-none">Nível</label><input type="number" value={formData.level} onChange={e => setFormData({...formData, level: Number(e.target.value)})} className="input-hero font-bold" /></div>
+                                                <div className="space-y-1.5 text-left leading-none"><label className="text-[8px] uppercase text-slate-600 font-bold leading-none">Dono</label><input type="text" disabled={role !== 'gm'} value={formData.ownerNickname} onChange={e => setFormData({...formData, ownerNickname: e.target.value})} className="input-hero text-[10px] text-orange-500 uppercase font-black" /></div>
                                             </div>
                                             <div className="space-y-4 pt-4 border-t border-white/5">
-                                                <h3 className="text-[10px] uppercase text-orange-500 font-bold font-magic italic">Equipamento</h3>
+                                                <h3 className="text-[10px] uppercase text-orange-500 font-bold font-magic italic leading-none">Equipamento</h3>
                                                 <div className="space-y-3">
                                                     <input type="text" value={formData.weapon} onChange={e => setFormData({...formData, weapon: e.target.value})} className="input-hero text-xs" placeholder="Arma" />
                                                     <input type="text" value={formData.armor} onChange={e => setFormData({...formData, armor: e.target.value})} className="input-hero text-xs" placeholder="Armadura" />
@@ -390,19 +408,26 @@
                                         </div>
                                         <div className="md:col-span-8 space-y-10 text-center">
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 leading-none">
-                                                <div className="glass-panel p-6 rounded-2xl text-center"><label className="text-[10px] uppercase text-red-500 block mb-4 italic font-black font-magic leading-none">Vitalidade Máx</label><input type="number" value={formData.hpMax} onChange={e => setFormData({...formData, hpMax: Number(e.target.value), hp: Number(e.target.value)})} className="bg-transparent text-5xl font-magic text-red-500 text-center w-full outline-none leading-none" /></div>
-                                                <div className="glass-panel p-6 rounded-2xl text-center"><label className="text-[10px] uppercase text-sky-500 block mb-4 italic font-black font-magic leading-none">Arcanismo Máx</label><input type="number" value={formData.slotsMax} onChange={e => setFormData({...formData, slotsMax: Number(e.target.value), slots: Number(e.target.value)})} className="bg-transparent text-5xl font-magic text-sky-400 text-center w-full outline-none leading-none" /></div>
+                                                <div className="glass-panel p-6 rounded-2xl text-center"><label className="text-[10px] uppercase text-red-500 block mb-4 italic font-black font-magic leading-none">Vitalidade Máx</label><input type="number" value={formData.hpMax} onChange={e => setFormData({...formData, hpMax: Number(e.target.value), hp: Number(e.target.value)})} className="bg-transparent text-5xl font-magic text-red-500 text-center w-full outline-none leading-none font-black" /></div>
+                                                <div className="glass-panel p-6 rounded-2xl text-center"><label className="text-[10px] uppercase text-sky-500 block mb-4 italic font-black font-magic leading-none">Arcanismo Máx</label><input type="number" value={formData.slotsMax} onChange={e => setFormData({...formData, slotsMax: Number(e.target.value), slots: Number(e.target.value)})} className="bg-transparent text-5xl font-magic text-sky-400 text-center w-full outline-none leading-none font-black" /></div>
                                             </div>
+                                            {/* GRID EDIT ATRIBUTOS COM BÓNUS DINÂMICO */}
                                             <div className="grid grid-cols-6 gap-3 leading-none">
-                                                {['str','dex','con','int','wis','cha'].map(a => (<div key={a} className="space-y-2"><label className="text-[9px] uppercase text-slate-500 font-bold block leading-none">{a}</label><input type="number" value={formData[a]} onChange={e => setFormData({...formData, [a]: Number(e.target.value)})} className="input-hero py-3 font-magic text-xl text-center font-black" /></div>))}
+                                                {['str','dex','con','int','wis','cha'].map(a => (
+                                                    <div key={a} className="space-y-2">
+                                                        <label className="text-[9px] uppercase text-slate-500 font-bold block leading-none">{a}</label>
+                                                        <input type="number" value={formData[a]} onChange={e => setFormData({...formData, [a]: Number(e.target.value)})} className="input-hero py-3 font-magic text-xl text-center font-black" />
+                                                        <div className="text-[10px] font-black text-orange-500 font-serif leading-none italic">{getMod(formData[a])}</div>
+                                                    </div>
+                                                ))}
                                             </div>
                                             <div className="space-y-3 text-left leading-none">
                                                 <label className="text-[10px] uppercase text-slate-500 italic ml-2 font-bold font-magic leading-none">Crónica do Herói</label>
                                                 <textarea value={formData.history} onChange={e => setFormData({...formData, history: e.target.value})} className="input-hero h-32 text-left text-sm font-serif italic resize-none p-4 break-words custom-scrollbar leading-relaxed" />
                                             </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 leading-none">
-                                                <textarea value={formData.skills} onChange={e => setFormData({...formData, skills: e.target.value})} className="input-hero h-32 text-left text-xs italic resize-none p-4 break-words custom-scrollbar" placeholder="Perícias (Nome: Desc;)" />
-                                                <textarea value={formData.abilities} onChange={e => setFormData({...formData, abilities: e.target.value})} className="input-hero h-32 text-left text-xs italic resize-none p-4 break-words custom-scrollbar" placeholder="Habilidades (Nome: Desc;)" />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 leading-none text-left">
+                                                <div className="space-y-1.5 leading-none"><label className="text-[9px] uppercase text-slate-500 font-bold ml-1 leading-none">Perícias</label><textarea value={formData.skills} onChange={e => setFormData({...formData, skills: e.target.value})} className="input-hero h-32 text-left text-xs italic resize-none p-4 break-words custom-scrollbar" placeholder="Nome: Desc;" /></div>
+                                                <div className="space-y-1.5 leading-none"><label className="text-[9px] uppercase text-slate-500 font-bold ml-1 leading-none">Habilidades</label><textarea value={formData.abilities} onChange={e => setFormData({...formData, abilities: e.target.value})} className="input-hero h-32 text-left text-xs italic resize-none p-4 break-words custom-scrollbar" placeholder="Nome: Desc;" /></div>
                                             </div>
                                             <textarea value={formData.inventory} onChange={e => setFormData({...formData, inventory: e.target.value})} className="input-hero h-24 text-left text-xs italic resize-none break-words custom-scrollbar" placeholder="Mochila..." />
                                         </div>
@@ -420,7 +445,7 @@
             );
         }
 
-        // --- SUB-COMPONENTES ---
+        // Sub-componentes
         function EquipItem({ icon, label, value }) {
             return (
                 <div className="flex flex-col gap-1 leading-none">
@@ -435,7 +460,7 @@
         function StatusBar({ label, val, max, col, edit, onDelta }) {
             const barColor = col === 'red' ? 'from-red-800 to-red-400' : 'from-sky-800 to-sky-400';
             return (
-                <div className="space-y-4 leading-none font-magic uppercase italic text-white">
+                <div className="space-y-4 leading-none font-magic uppercase italic text-white leading-none">
                     <div className="flex justify-between items-end leading-none">
                         <span className={`text-${col}-500 text-[10px] font-black tracking-[0.2em] leading-none`}>{label}</span>
                         <div className="flex items-center gap-4 leading-none">
@@ -465,7 +490,7 @@
                                     </div>
                                 )}
                             </div>
-                        )) : <span className="text-[9px] text-slate-700 font-black tracking-widest leading-none">Vazio.</span>}
+                        )) : <span className="text-[9px] text-slate-700 font-black tracking-widest leading-none text-white font-magic uppercase">Vazio.</span>}
                     </div>
                 </div>
             );
