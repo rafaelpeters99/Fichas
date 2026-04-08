@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grimoire RPG - Realtime</title>
+    <title>Grimoire RPG - Realtime Online</title>
     
     <!-- Bibliotecas Base -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -99,14 +99,26 @@
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div class="h-screen flex items-center justify-center bg-slate-950 text-orange-500 font-magic animate-pulse text-xl text-center p-10">
+            A preparar o Grimório...<br/>
+            <span class="text-xs font-sans text-slate-500 mt-4 block uppercase tracking-widest">Sintonizando frequências místicas</span>
+        </div>
+    </div>
 
-    <script type="text/babel" data-type="module">
-        import { initializeApp } from "firebase/app";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
-        import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc } from "firebase/firestore";
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // Disponibilizar para o Babel
+        window.FirebaseSDK = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc };
+    </script>
+
+    <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
+        const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc } = window.FirebaseSDK;
 
         // --- TUA CONFIGURAÇÃO OFICIAL ---
         const firebaseConfig = {
@@ -120,6 +132,7 @@
         };
 
         const MASTER_KEY = "MESTRE123";
+        const APP_ID_PATH = 'grimoire-rpg-global'; // Sincronização global para todos os utilizadores no mesmo link
 
         // Ícones SVG Nativa para evitar erros de manipulação de DOM do React
         const Icon = ({ name, size = 20, className = "" }) => {
@@ -138,19 +151,8 @@
                 "loader-2": <path d="M21 12a9 9 0 1 1-6.219-8.56"/>,
                 user: <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>
             };
-
             return (
-                <svg 
-                    width={size} 
-                    height={size} 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    className={className}
-                >
+                <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                     {icons[name] || null}
                 </svg>
             );
@@ -162,6 +164,7 @@
             const [nickname, setNickname] = useState(localStorage.getItem('rpg_nickname') || "");
             const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('rpg_nickname'));
             const [role, setRole] = useState(localStorage.getItem('rpg_role') || 'player');
+            const [isConnected, setIsConnected] = useState(false);
 
             const [rooms, setRooms] = useState([]);
             const [currentRoom, setCurrentRoom] = useState(null);
@@ -177,38 +180,62 @@
             const [gmPass, setGmPass] = useState("");
             const [showGmLogin, setShowGmLogin] = useState(false);
 
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'rpg-final';
-
-            // --- INICIALIZAÇÃO FIREBASE ---
+            // --- 1. AUTH ANTES DE TUDO (REGRA 3) ---
+            // Corrigido para lidar com custom-token-mismatch
             useEffect(() => {
-                const app = initializeApp(firebaseConfig);
-                const auth = getAuth(app);
-                const firestore = getFirestore(app);
-                setDb(firestore);
-                signInAnonymously(auth).then(() => {
-                    onAuthStateChanged(auth, setUser);
-                });
+                const init = async () => {
+                    try {
+                        const app = initializeApp(firebaseConfig);
+                        const auth = getAuth(app);
+                        const firestore = getFirestore(app);
+                        setDb(firestore);
+
+                        let signedIn = false;
+                        // Prioridade para token customizado se existir (interno do ambiente)
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            try {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                                signedIn = true;
+                            } catch (tokenErr) {
+                                console.warn("Token mismatch detectado, tentando entrada anónima...");
+                            }
+                        }
+
+                        // Fallback para anónimo se falhar o token ou não existir
+                        if (!signedIn) {
+                            await signInAnonymously(auth);
+                        }
+
+                        onAuthStateChanged(auth, (u) => {
+                            setUser(u);
+                            if (u) setIsConnected(true);
+                        });
+                    } catch (e) {
+                        console.error("Erro na conexão Firebase:", e);
+                    }
+                };
+                init();
             }, []);
 
-            // --- ESCUTAR SALAS (Regra 1: Caminho Estrito) ---
+            // --- 2. ESCUTAR SALAS (REGRA 1) ---
             useEffect(() => {
                 if (!user || !db) return;
-                const roomsCol = collection(db, 'artifacts', appId, 'public', 'data', 'rooms');
+                const roomsCol = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'rooms');
                 return onSnapshot(roomsCol, (snap) => {
                     setRooms(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                });
-            }, [user, db, appId]);
+                }, (err) => console.error("Erro Salas:", err));
+            }, [user, db]);
 
-            // --- ESCUTAR PERSONAGENS ---
+            // --- 3. ESCUTAR PERSONAGENS (REGRA 2) ---
             useEffect(() => {
                 if (!user || !db || !currentRoom) return;
-                const charCol = collection(db, 'artifacts', appId, 'public', 'data', 'characters');
+                const charCol = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'characters');
                 return onSnapshot(charCol, (snap) => {
                     const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    // Regra 2: Filtragem em memória
+                    // Filtragem manual em memória
                     setCharacters(all.filter(c => c.roomId === currentRoom.id).sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
-                });
-            }, [user, db, currentRoom, appId]);
+                }, (err) => console.error("Erro Personagens:", err));
+            }, [user, db, currentRoom]);
 
             const handleLogin = (e) => {
                 e.preventDefault();
@@ -232,15 +259,11 @@
             const createRoom = async () => {
                 if (!newRoomName.trim() || !db || !user) return;
                 try {
-                    const roomsCol = collection(db, 'artifacts', appId, 'public', 'data', 'rooms');
+                    const roomsCol = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'rooms');
                     const roomDoc = doc(roomsCol);
                     await setDoc(roomDoc, { name: newRoomName.trim(), master: nickname, createdAt: Date.now() });
-                } catch (e) {
-                    console.error("Erro ao criar sala:", e);
-                } finally {
-                    setNewRoomName("");
-                    setIsCreatingRoom(false); // Agora fecha sempre
-                }
+                } catch (e) { console.error(e); }
+                finally { setNewRoomName(""); setIsCreatingRoom(false); }
             };
 
             const saveChar = async () => {
@@ -248,36 +271,24 @@
                 setIsSaving(true);
                 try {
                     const id = editingId === 'new' ? Math.random().toString(36).substr(2, 9) : editingId;
-                    const charDoc = doc(db, 'artifacts', appId, 'public', 'data', 'characters', id);
+                    const charDoc = doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'characters', id);
                     await setDoc(charDoc, {
                         ...formData,
                         roomId: currentRoom.id,
                         updatedAt: Date.now(),
                         ownerNickname: formData.ownerNickname || nickname
                     }, { merge: true });
-                } catch (e) {
-                    console.error("Erro ao salvar herói:", e);
-                } finally {
-                    setIsSaving(false);
-                    setEditingId(null); // Agora fecha sempre
-                    setFormData(null);
-                }
-            };
-
-            const deleteChar = async (id) => {
-                if (!db || !user) return;
-                if (confirm("Deseja apagar este herói?")) {
-                    const charDoc = doc(db, 'artifacts', appId, 'public', 'data', 'characters', id);
-                    await deleteDoc(charDoc);
-                }
+                } catch (e) { console.error(e); }
+                finally { setIsSaving(false); setEditingId(null); setFormData(null); }
             };
 
             const updateStat = async (id, field, delta, maxField) => {
                 if (!db || !user) return;
                 const char = characters.find(c => c.id === id);
+                if (!char) return;
                 let val = (Number(char[field]) || 0) + delta;
                 if (maxField) val = Math.min(val, Number(char[maxField]) || 999);
-                const charDoc = doc(db, 'artifacts', appId, 'public', 'data', 'characters', id);
+                const charDoc = doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'characters', id);
                 await updateDoc(charDoc, { [field]: Math.max(0, val) });
             };
 
@@ -285,15 +296,15 @@
 
             if (!isLoggedIn) {
                 return (
-                    <div className="min-h-screen flex items-center justify-center p-6">
-                        <div className="glass-panel p-10 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl animate-in">
+                    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950">
+                        <div className="glass-panel p-10 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl">
                             <Icon name="shield" size={48} className="text-orange-500 mb-6 mx-auto" />
-                            <h1 className="text-4xl font-magic font-black uppercase mb-10 text-white">Grimoire</h1>
+                            <h1 className="text-4xl font-magic font-black uppercase mb-10 text-white leading-none">Grimoire</h1>
                             {!showGmLogin ? (
                                 <form onSubmit={handleLogin} className="space-y-6">
                                     <input type="text" value={nickname} onChange={e => setNickname(e.target.value)} placeholder="Teu Nickname" className="input-hero py-4 text-center" />
                                     <button className="w-full bg-orange-600 p-4 rounded-xl font-black uppercase text-sm shadow-lg hover:bg-orange-500 transition-all">Entrar</button>
-                                    <button type="button" onClick={() => setShowGmLogin(true)} className="text-slate-500 text-xs font-bold uppercase mt-4 block mx-auto">Mestre</button>
+                                    <button type="button" onClick={() => setShowGmLogin(true)} className="text-slate-500 text-xs font-bold uppercase mt-4 block mx-auto">Acesso Mestre</button>
                                 </form>
                             ) : (
                                 <form onSubmit={handleGmLogin} className="space-y-6">
@@ -311,8 +322,11 @@
                 return (
                     <div className="max-w-[800px] mx-auto p-8 md:p-20 min-h-screen animate-in">
                         <header className="flex justify-between items-center mb-16">
-                            <h1 className="text-4xl font-magic font-black uppercase text-white">Salas</h1>
-                            <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="p-3 glass-panel rounded-xl text-slate-500"><Icon name="log-out" /></button>
+                            <div className="flex items-center gap-4">
+                                <h1 className="text-4xl font-magic font-black uppercase text-white">Salas</h1>
+                                <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-red-500 animate-pulse'}`} title={isConnected ? "Online" : "A conectar..."}></div>
+                            </div>
+                            <button onClick={() => { localStorage.clear(); window.location.reload(); }} title="Sair" className="p-3 glass-panel rounded-xl text-slate-500 hover:text-red-500 transition-colors"><Icon name="log-out" /></button>
                         </header>
                         <div className="grid grid-cols-1 gap-6">
                             {role === 'gm' && (
@@ -325,7 +339,7 @@
                                 <div key={room.id} onClick={() => setCurrentRoom(room)} className="glass-panel p-8 rounded-3xl flex justify-between items-center cursor-pointer hover:border-orange-500/50 transition-all group">
                                     <div className="flex items-center gap-6">
                                         <Icon name="shield" size={32} className="text-orange-500/40 group-hover:text-orange-500" />
-                                        <div><h3 className="text-2xl font-magic font-black uppercase text-white leading-none">{room.name}</h3><p className="text-[10px] text-slate-500 uppercase font-black mt-2">Mestre: {room.master}</p></div>
+                                        <div><h3 className="text-2xl font-magic font-black uppercase text-white leading-none">{room.name}</h3><p className="text-[10px] text-slate-500 uppercase font-black mt-2 leading-none">Mestre: {room.master}</p></div>
                                     </div>
                                     <Icon name="door-open" size={24} className="text-slate-700" />
                                 </div>
@@ -352,13 +366,13 @@
                     <header className="flex justify-between items-center mb-16">
                         <div className="flex items-center gap-6">
                             <Icon name="shield" size={32} className="text-orange-500" />
-                            <div><h1 className="text-3xl md:text-5xl font-magic font-black uppercase text-white leading-none">{currentRoom.name}</h1><p className="text-[10px] uppercase text-slate-500 tracking-widest mt-1 italic">{nickname} • Online</p></div>
+                            <div><h1 className="text-3xl md:text-5xl font-magic font-black uppercase text-white leading-none tracking-tighter">{currentRoom.name}</h1><p className="text-[10px] uppercase text-slate-500 tracking-widest mt-1 italic">{nickname} • Online</p></div>
                         </div>
                         <button onClick={() => setCurrentRoom(null)} className="p-4 glass-panel rounded-xl text-slate-500 hover:text-orange-500 flex items-center gap-3 font-black text-[10px] uppercase tracking-tighter">Mudar Sala</button>
                     </header>
 
                     <div className="flex justify-between items-center mb-10">
-                        <span className="text-[10px] uppercase tracking-widest text-slate-500 border-l border-orange-500 pl-4 font-bold">{characters.length} Heróis Online</span>
+                        <span className="text-[10px] uppercase tracking-widest text-slate-400 border-l border-orange-500 pl-4 font-bold">{characters.length} Registos Online</span>
                         <button onClick={() => { setFormData({ name: "", hp: 10, hpMax: 10, slots: 2, slotsMax: 2, str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, level: 1, ownerNickname: role === 'gm' ? "" : nickname, isHidden: false, history: "", skills: "", abilities: "", inventory: "", weapon: "", armor: "", accessory: "", imageUrl: "" }); setEditingId('new'); }} className="bg-orange-600 p-5 rounded-full shadow-xl hover:scale-110 active:scale-95 transition-all"><Icon name="plus" size={24}/></button>
                     </div>
 
@@ -373,7 +387,7 @@
                                     <div className="relative h-64 hover:h-auto hover:aspect-square bg-slate-950 overflow-hidden rounded-t-[3rem] border-b border-white/5 transition-all duration-700 ease-in-out group/photo">
                                         {char.imageUrl ? <img src={char.imageUrl} className="w-full h-full object-cover opacity-80 group-hover/photo:opacity-100" /> : <div className="h-full flex items-center justify-center opacity-10 text-slate-800"><Icon name="user" size={64} /></div>}
                                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent group-hover/photo:opacity-0 transition-opacity duration-700"></div>
-                                        {isOwner && <div className="absolute top-4 left-4 bg-orange-500 text-slate-950 font-black px-3 py-1 rounded-full text-[8px] uppercase tracking-widest leading-none">MEU HERÓI</div>}
+                                        {isOwner && <div className="absolute top-4 left-4 bg-orange-500 text-slate-950 font-black px-3 py-1 rounded-full text-[8px] uppercase tracking-widest leading-none shadow-lg">MEU HERÓI</div>}
                                         {hasAccess && (
                                             <button onClick={() => setStoryCharId(char.id)} className="absolute bottom-4 right-6 text-white/40 font-magic uppercase text-[8px] tracking-widest opacity-0 hover:text-white transition-all flex items-center gap-2 italic group-hover/photo:opacity-100 bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm">
                                                 Ler Crónica <Icon name="scroll-text" size={14} />
@@ -385,11 +399,11 @@
                                         <div className="flex justify-between items-start mb-10 gap-4">
                                             <div className="flex-1 min-w-0">
                                                 <h3 className="text-3xl font-magic font-black uppercase italic leading-none text-white mb-2 truncate break-words">{char.name}</h3>
-                                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-2 leading-none italic">{char.ownerNickname} • Nível {char.level}</p>
+                                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest leading-none mt-2 italic">{char.ownerNickname} • Nível {char.level}</p>
                                             </div>
                                             <div className="flex gap-2">
                                                 {hasAccess && <button onClick={() => { setEditingId(char.id); setFormData(char); }} className="p-3 glass-panel rounded-xl text-orange-500 hover:bg-orange-500/10 transition-colors shadow-inner"><Icon name="edit-3" size={18}/></button>}
-                                                {role === 'gm' && <button onClick={() => deleteChar(char.id)} className="p-3 glass-panel rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"><Icon name="trash-2" size={18}/></button>}
+                                                {role === 'gm' && <button onClick={() => deleteDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'characters', char.id))} className="p-3 glass-panel rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"><Icon name="trash-2" size={18}/></button>}
                                             </div>
                                         </div>
                                         
@@ -404,7 +418,7 @@
                                                     {['str','dex','con','int','wis','cha'].map(a => (<div key={a} className="glass-panel py-3 rounded-2xl text-center group hover:border-orange-500/30 transition-all leading-none"><div className="text-[8px] text-slate-600 uppercase mb-1 font-black group-hover:text-orange-500 leading-none">{a}</div><div className="text-xl font-magic font-black text-white leading-none">{char[a] || 10}</div></div>))}
                                                 </div>
 
-                                                <button onClick={() => setExpandedCards(p => ({...p, [char.id]: !p[char.id]}))} className={`w-full p-4 rounded-2xl font-magic font-black uppercase text-[9px] tracking-[0.3em] transition-all flex justify-between items-center ${isExpanded ? 'bg-orange-600 text-white shadow-xl' : 'glass-panel text-slate-500'}`}>
+                                                <button onClick={() => setExpandedCards(p => ({...p, [char.id]: !p[char.id]}))} className={`w-full p-4 rounded-2xl font-magic font-black uppercase text-[9px] tracking-[0.3em] transition-all flex justify-between items-center ${isExpanded ? 'bg-orange-600 text-white shadow-xl shadow-orange-900/20' : 'glass-panel text-slate-500'}`}>
                                                     <span>Inventário & Saberes</span>
                                                     <span>{isExpanded ? '▲' : '▼'}</span>
                                                 </button>
@@ -452,7 +466,7 @@
                     {editingId && formData && (
                         <div className="editor-overlay">
                             <div className="editor-content glass-panel animate-in">
-                                <div className="p-5 border-b border-white/10 flex justify-between items-center bg-slate-900/80">
+                                <div className="p-5 border-b border-white/10 flex justify-between items-center bg-slate-900/80 shadow-xl">
                                     <div className="flex items-center gap-3 text-orange-500 font-magic italic leading-none"><Icon name="shield" size={24}/><h2 className="text-xl uppercase tracking-tighter leading-none">Forjar Destino</h2></div>
                                     <button onClick={() => setEditingId(null)} className="p-2 text-slate-400 hover:text-white transition-colors"><Icon name="x" size={24}/></button>
                                 </div>
@@ -478,15 +492,15 @@
                                                 }}/>
                                             </label>
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1.5 text-left"><label className="text-[8px] uppercase text-slate-600 leading-none font-bold">Nível</label><input type="number" value={formData.level} onChange={e => setFormData({...formData, level: Number(e.target.value)})} className="input-hero" /></div>
-                                                <div className="space-y-1.5 text-left"><label className="text-[8px] uppercase text-slate-600 leading-none font-bold">Dono</label><input type="text" disabled={role !== 'gm'} value={formData.ownerNickname} onChange={e => setFormData({...formData, ownerNickname: e.target.value})} className="input-hero text-[10px] text-orange-500 uppercase font-black" /></div>
+                                                <div className="space-y-1.5"><label className="text-[8px] uppercase text-slate-600 leading-none font-bold">Nível</label><input type="number" value={formData.level} onChange={e => setFormData({...formData, level: Number(e.target.value)})} className="input-hero font-bold" /></div>
+                                                <div className="space-y-1.5"><label className="text-[8px] uppercase text-slate-600 leading-none font-bold">Dono</label><input type="text" disabled={role !== 'gm'} value={formData.ownerNickname} onChange={e => setFormData({...formData, ownerNickname: e.target.value})} className="input-hero text-[10px] text-orange-500 uppercase font-black" /></div>
                                             </div>
-                                            <div className="space-y-4 pt-4 border-t border-white/5">
+                                            <div className="space-y-4 pt-4 border-t border-white/5 text-left">
                                                 <h3 className="text-[10px] uppercase text-orange-500 tracking-widest font-bold italic">Equipamento</h3>
                                                 <div className="space-y-3">
-                                                    <input type="text" value={formData.weapon} onChange={e => setFormData({...formData, weapon: e.target.value})} className="input-hero text-xs" placeholder="Arma" />
-                                                    <input type="text" value={formData.armor} onChange={e => setFormData({...formData, armor: e.target.value})} className="input-hero text-xs" placeholder="Armadura" />
-                                                    <input type="text" value={formData.accessory} onChange={e => setFormData({...formData, accessory: e.target.value})} className="input-hero text-xs" placeholder="Acessório" />
+                                                    <input type="text" value={formData.weapon} onChange={e => setFormData({...formData, weapon: e.target.value})} className="input-hero text-xs italic" placeholder="Arma" />
+                                                    <input type="text" value={formData.armor} onChange={e => setFormData({...formData, armor: e.target.value})} className="input-hero text-xs italic" placeholder="Armadura" />
+                                                    <input type="text" value={formData.accessory} onChange={e => setFormData({...formData, accessory: e.target.value})} className="input-hero text-xs italic" placeholder="Acessório" />
                                                 </div>
                                             </div>
                                         </div>
@@ -502,16 +516,16 @@
                                                 <label className="text-[10px] uppercase text-slate-500 italic ml-2 tracking-widest leading-none font-bold">Crónica (História)</label>
                                                 <textarea value={formData.history} onChange={e => setFormData({...formData, history: e.target.value})} className="input-hero h-32 text-left text-sm font-serif italic resize-none p-4 break-words custom-scrollbar" />
                                             </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <textarea value={formData.skills} onChange={e => setFormData({...formData, skills: e.target.value})} className="input-hero h-32 text-left text-xs italic resize-none p-4 break-words custom-scrollbar" placeholder="Perícias (Nome: Desc;)" />
-                                                <textarea value={formData.abilities} onChange={e => setFormData({...formData, abilities: e.target.value})} className="input-hero h-32 text-left text-xs italic resize-none p-4 break-words custom-scrollbar" placeholder="Habilidades (Nome: Desc;)" />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                                                <div className="space-y-1.5"><label className="text-[9px] uppercase text-slate-500 italic ml-1 font-bold leading-none">Perícias</label><textarea value={formData.skills} onChange={e => setFormData({...formData, skills: e.target.value})} className="input-hero h-32 text-left text-xs italic resize-none p-4 break-words custom-scrollbar" placeholder="Nome: Desc;" /></div>
+                                                <div className="space-y-1.5"><label className="text-[9px] uppercase text-slate-500 italic ml-1 font-bold leading-none">Habilidades</label><textarea value={formData.abilities} onChange={e => setFormData({...formData, abilities: e.target.value})} className="input-hero h-32 text-left text-xs italic resize-none p-4 break-words custom-scrollbar" placeholder="Nome: Desc;" /></div>
                                             </div>
                                             <textarea value={formData.inventory} onChange={e => setFormData({...formData, inventory: e.target.value})} className="input-hero h-24 text-left text-xs italic resize-none break-words custom-scrollbar" placeholder="Mochila..." />
                                         </div>
                                     </div>
                                 </div>
-                                <div className="p-8 border-t border-white/10 bg-slate-900/90 flex justify-center">
-                                    <button onClick={saveChar} disabled={isSaving} className="w-full max-w-xl bg-orange-600 p-5 rounded-2xl text-2xl font-magic font-black uppercase tracking-[0.4em] shadow-xl hover:bg-orange-500 transition-all flex justify-center items-center gap-6 leading-none active:scale-95 disabled:opacity-50">
+                                <div className="p-8 border-t border-white/10 bg-slate-900/90 flex justify-center shadow-inner">
+                                    <button onClick={saveChar} disabled={isSaving} className="w-full max-w-xl bg-orange-600 p-5 rounded-2xl text-2xl font-magic font-black uppercase tracking-[0.4em] shadow-[0_20px_50px_rgba(234,88,12,0.3)] hover:bg-orange-500 transition-all flex justify-center items-center gap-6 leading-none active:scale-95 disabled:opacity-50">
                                         {isSaving ? <Icon name="loader-2" className="animate-spin" /> : <Icon name="shield" size={32} />} Selar Escritura
                                     </button>
                                 </div>
@@ -522,7 +536,7 @@
             );
         }
 
-        // --- SUB-COMPONENTES ---
+        // Sub-componentes
         function EquipItem({ icon, label, value }) {
             return (
                 <div className="flex flex-col gap-1">
@@ -539,7 +553,7 @@
             const barColor = col === 'red' ? 'from-red-800 to-red-400' : 'from-sky-800 to-sky-400';
             return (
                 <div className="space-y-4">
-                    <div className="flex justify-between items-end text-white">
+                    <div className="flex justify-between items-end text-white leading-none">
                         <span className={`text-${col}-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1 italic leading-none`}>{label}</span>
                         <div className="flex items-center gap-4 leading-none">
                             {edit && <button onClick={()=>onDelta(-1)} className="text-slate-600 hover:text-white transition-colors text-2xl font-light outline-none leading-none">-</button>}
