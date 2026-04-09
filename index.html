@@ -66,12 +66,15 @@
             word-break: break-word;
         }
 
-        /* Animação do Dado Surgindo */
+        .photo-container {
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Animação do Dado */
         .dice-roll-anim {
             animation: rollPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
 
-        /* Animação de Rotação durante o sorteio */
         .dice-spin-active {
             animation: diceSpin 0.2s linear infinite;
         }
@@ -87,7 +90,6 @@
             100% { transform: scale(1) rotate(0deg); opacity: 1; }
         }
 
-        /* Cantinho fixo dos dados */
         .dice-sidebar {
             position: fixed;
             left: 1.25rem;
@@ -214,7 +216,7 @@
                 });
             };
 
-            // --- LÓGICA DE SALVAMENTO (JSON) ---
+            // --- BACKUP ---
             const exportData = () => {
                 const dataStr = JSON.stringify(characters, null, 2);
                 const blob = new Blob([dataStr], { type: "application/json" });
@@ -234,16 +236,16 @@
                         const imported = JSON.parse(event.target.result);
                         setCharacters(imported);
                         broadcastData(imported);
-                        alert("Sessão restaurada com sucesso!");
-                    } catch (err) { alert("Erro ao ler o ficheiro."); }
+                        alert("Sessão Restaurada!");
+                    } catch (err) { alert("Erro no ficheiro."); }
                 };
                 reader.readAsText(file);
             };
 
-            // --- LÓGICA DE DADOS ---
+            // --- DADOS ---
             const rollDice = (sides) => {
                 const myChars = characters.filter(c => c.ownerNickname?.toLowerCase().trim() === nickname.toLowerCase().trim());
-                if (myChars.length === 0 && role !== 'gm') return alert("Cria um herói primeiro!");
+                if (myChars.length === 0 && role !== 'gm') return alert("Cria um herói!");
                 
                 const targetId = myChars[0]?.id;
                 const timestamp = Date.now();
@@ -268,7 +270,6 @@
                     });
                     setCharacters(newList);
                     broadcastData(newList);
-
                     setTimeout(() => {
                         setCharacters(prev => prev.map(c => {
                             if (c.lastRoll?.time === timestamp) {
@@ -323,7 +324,6 @@
 
             const selectedStoryChar = useMemo(() => characters.find(c => c.id === storyCharId), [characters, storyCharId]);
 
-            // --- VIEWS ---
             if (!isLoggedIn) {
                 return (
                     <div className="min-h-screen flex items-center justify-center p-6 animate-in">
@@ -369,8 +369,6 @@
 
             return (
                 <div className="max-w-[1600px] mx-auto p-4 md:p-12 lg:pl-32 animate-in min-h-screen">
-                    
-                    {/* MENU DE DADOS */}
                     <div className="dice-sidebar flex flex-col gap-4">
                         <div className="text-[8px] font-black uppercase text-orange-500/50 text-center mb-1 tracking-tighter">Rolagem</div>
                         {[4,6,8,10,12,20].map(s => (
@@ -389,14 +387,14 @@
                         <div className="flex gap-3">
                             {role === 'gm' && (
                                 <>
-                                    <button onClick={exportData} title="Guardar em ficheiro" className="p-4 glass-panel rounded-xl text-emerald-500 hover:bg-emerald-500/10 transition-all flex items-center gap-2 font-black text-[10px] uppercase"><Icon name="download" size={16}/> Arquivar</button>
-                                    <label title="Carregar de ficheiro" className="p-4 glass-panel rounded-xl text-sky-500 hover:bg-sky-500/10 transition-all flex items-center gap-2 font-black text-[10px] uppercase cursor-pointer">
+                                    <button onClick={exportData} title="Exportar Crónica" className="p-4 glass-panel rounded-xl text-emerald-500 hover:bg-emerald-500/10 transition-all flex items-center gap-2 font-black text-[10px] uppercase"><Icon name="download" size={16}/> Arquivar</button>
+                                    <label title="Importar Crónica" className="p-4 glass-panel rounded-xl text-sky-500 hover:bg-sky-500/10 transition-all flex items-center gap-2 font-black text-[10px] uppercase cursor-pointer">
                                         <Icon name="upload" size={16}/> Restaurar
                                         <input type="file" accept=".json" className="hidden" onChange={importData} />
                                     </label>
                                 </>
                             )}
-                            <button onClick={() => window.location.reload()} className="p-4 glass-panel rounded-xl text-slate-500 hover:text-red-500 transition-all font-black text-[10px] uppercase">Sair da Sala</button>
+                            <button onClick={() => window.location.reload()} className="p-4 glass-panel rounded-xl text-slate-500 hover:text-red-500 transition-all font-black text-[10px] uppercase">Mudar Sala</button>
                         </div>
                     </header>
 
@@ -406,7 +404,7 @@
                             const hasAccess = isOwner || role === 'gm';
                             const isExpanded = expandedCards[char.id];
                             return (
-                                <div key={char.id} className={`glass-panel rounded-[3rem] border-2 ${isOwner ? 'border-orange-500/30' : 'border-transparent'} flex flex-col shadow-2xl transition-all relative z-10 hover:z-30`}>
+                                <div key={char.id} className={`glass-panel rounded-[3rem] border-2 ${isOwner ? 'border-orange-500/30 shadow-orange-950/20' : 'border-transparent'} flex flex-col shadow-2xl transition-all relative z-10 hover:z-30`}>
                                     
                                     <div className="photo-container relative h-64 hover:h-auto hover:aspect-square bg-slate-950 overflow-hidden rounded-t-[3rem] border-b border-white/5 group/photo">
                                         {char.imageUrl ? <img src={char.imageUrl} className="w-full h-full object-cover" /> : <div className="h-full flex items-center justify-center opacity-10"><Icon name="user" size={64} className="text-white"/></div>}
@@ -424,7 +422,7 @@
                                         {visibleHistoryId === char.id && (
                                             <div className="absolute top-14 right-4 z-[60] glass-panel p-4 rounded-2xl w-48 shadow-2xl border-orange-500/30 animate-in text-white overflow-hidden">
                                                 <div className="flex justify-between items-center mb-3 border-b border-white/10 pb-2">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-orange-500">Registo</span>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-orange-500 text-left">Registo</span>
                                                     <button onClick={() => setVisibleHistoryId(null)}><Icon name="x" size={12}/></button>
                                                 </div>
                                                 <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
@@ -453,7 +451,7 @@
 
                                         <div className="absolute top-4 left-4 flex gap-2 pointer-events-none">
                                             {isOwner && <div className="bg-orange-500 text-slate-950 font-black px-3 py-1 rounded-full text-[8px] uppercase tracking-widest shadow-lg">MEU HERÓI</div>}
-                                            {char.isHidden && <div className="bg-purple-600 text-white font-black px-3 py-1 rounded-full text-[8px] uppercase tracking-widest shadow-lg">OCULTO</div>}
+                                            {char.isHidden && <div className="bg-purple-600 text-white font-black px-3 py-1 rounded-full text-[8px] uppercase tracking-widest shadow-lg leading-none">OCULTO</div>}
                                         </div>
 
                                         <button onClick={() => setStoryCharId(char.id)} className="absolute bottom-4 right-6 text-white/40 font-magic uppercase text-[8px] tracking-widest opacity-0 hover:text-white group-hover/photo:opacity-100 bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm italic">
@@ -462,10 +460,10 @@
                                     </div>
 
                                     <div className="p-8 text-white">
-                                        <div className="flex justify-between items-start mb-10 gap-4 leading-none">
+                                        <div className="flex justify-between items-start mb-10 gap-4 leading-none text-left">
                                             <div className="flex-1 min-w-0">
                                                 <h3 className="text-3xl font-magic font-black uppercase italic leading-none truncate">{char.name}</h3>
-                                                <p className="text-[10px] font-black uppercase tracking-widest mt-2 opacity-50 italic">{char.ownerNickname} • Nível {char.level}</p>
+                                                <p className="text-[10px] font-black uppercase tracking-widest mt-2 opacity-50 italic">{char.ownerNickname} • Nível {char.level} • CA {char.ca || 10}</p>
                                             </div>
                                             <div className="flex gap-2 leading-none">
                                                 {role === 'gm' && (
@@ -473,8 +471,8 @@
                                                         <Icon name={char.isHidden ? "eye-off" : "eye"} size={18} />
                                                     </button>
                                                 )}
-                                                {hasAccess && <button onClick={() => { setEditingId(char.id); setFormData(char); }} className="p-3 glass-panel rounded-xl text-orange-500 hover:bg-orange-500/10 transition-colors shadow-inner"><Icon name="edit-3" size={18}/></button>}
-                                                {role === 'gm' && <button onClick={() => deleteChar(char.id)} className="p-3 glass-panel rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"><Icon name="trash-2" size={18}/></button>}
+                                                {hasAccess && <button onClick={() => { setEditingId(char.id); setFormData(char); }} className="p-3 glass-panel rounded-xl text-orange-500 hover:bg-orange-500/10"><Icon name="edit-3" size={18}/></button>}
+                                                {role === 'gm' && <button onClick={() => deleteChar(char.id)} className="p-3 glass-panel rounded-xl text-red-500 hover:bg-red-500/10"><Icon name="trash-2" size={18}/></button>}
                                             </div>
                                         </div>
                                         
@@ -520,9 +518,9 @@
                                 </div>
                             );
                         })}
-                        <button onClick={() => { setFormData({ name: "", hp: 10, hpMax: 10, slots: 2, slotsMax: 2, str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, level: 1, ownerNickname: role === 'gm' ? "" : nickname, isHidden: false, history: "", skills: "", abilities: "", inventory: "", weapon: "", armor: "", accessory: "", imageUrl: "" }); setEditingId('new'); }} className="glass-panel border-dashed border-2 border-slate-800 rounded-[3rem] p-20 flex flex-col items-center justify-center gap-4 text-slate-700 hover:text-orange-500 hover:border-orange-500/40 transition-all group min-h-[300px]">
+                        <button onClick={() => { setFormData({ name: "", ca: 10, hp: 10, hpMax: 10, slots: 2, slotsMax: 2, str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, level: 1, ownerNickname: role === 'gm' ? "" : nickname, isHidden: false, history: "", skills: "", abilities: "", inventory: "", weapon: "", armor: "", accessory: "", imageUrl: "" }); setEditingId('new'); }} className="glass-panel border-dashed border-2 border-slate-800 rounded-[3rem] p-20 flex flex-col items-center justify-center gap-4 text-slate-700 hover:text-orange-500 hover:border-orange-500/40 transition-all group min-h-[300px]">
                             <Icon name="plus" size={48} />
-                            <span className="font-magic uppercase font-black text-xs tracking-widest italic">Invocar Viajante</span>
+                            <span className="font-magic uppercase font-black text-xs tracking-widest italic leading-none">Invocar Viajante</span>
                         </button>
                     </div>
 
@@ -545,7 +543,7 @@
                                     <div className="flex items-center gap-3 text-orange-500 font-magic italic leading-none"><Icon name="shield" size={24}/><h2 className="text-xl uppercase tracking-tighter">Forjar Destino</h2></div>
                                     <button onClick={() => setEditingId(null)} className="p-2 text-slate-400 hover:text-white"><Icon name="x" size={24}/></button>
                                 </div>
-                                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#020617]/50">
+                                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#020617]/50 text-white">
                                     <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
                                         <div className="md:col-span-4 space-y-6 text-left">
                                             <div className="space-y-1.5 text-left leading-none"><label className="text-[10px] uppercase text-slate-500 font-bold ml-1 italic leading-none">Identidade</label><input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input-hero text-lg font-magic uppercase text-orange-500" /></div>
@@ -564,11 +562,12 @@
                                                     }; reader.readAsDataURL(file);
                                                 }}/>
                                             </label>
-                                            <div className="grid grid-cols-2 gap-4 leading-none text-left">
-                                                <div className="space-y-1.5"><label className="text-[8px] uppercase text-slate-600 font-bold">Nível</label><input type="number" value={formData.level} onChange={e => setFormData({...formData, level: Number(e.target.value)})} className="input-hero font-bold text-white" /></div>
-                                                <div className="space-y-1.5"><label className="text-[8px] uppercase text-slate-600 font-bold">Dono</label><input type="text" disabled={role !== 'gm'} value={formData.ownerNickname} onChange={e => setFormData({...formData, ownerNickname: e.target.value})} className="input-hero text-[10px] text-orange-500 uppercase font-black" /></div>
+                                            <div className="grid grid-cols-3 gap-2 leading-none text-left">
+                                                <div><label className="text-[8px] uppercase text-slate-600 font-bold">Nível</label><input type="number" value={formData.level} onChange={e => setFormData({...formData, level: Number(e.target.value)})} className="input-hero font-bold" /></div>
+                                                <div><label className="text-[8px] uppercase text-slate-600 font-bold">CA</label><input type="number" value={formData.ca} onChange={e => setFormData({...formData, ca: Number(e.target.value)})} className="input-hero font-bold text-orange-500" /></div>
+                                                <div><label className="text-[8px] uppercase text-slate-600 font-bold">Dono</label><input type="text" disabled={role !== 'gm'} value={formData.ownerNickname} onChange={e => setFormData({...formData, ownerNickname: e.target.value})} className="input-hero text-[8px] text-slate-400 uppercase font-black" /></div>
                                             </div>
-                                            <div className="space-y-4 pt-4 border-t border-white/5">
+                                            <div className="space-y-4 pt-4 border-t border-white/5 text-left">
                                                 <h3 className="text-[10px] uppercase text-orange-500 font-bold font-magic italic leading-none">Equipamento</h3>
                                                 <div className="space-y-3 leading-none">
                                                     <input type="text" value={formData.weapon} onChange={e => setFormData({...formData, weapon: e.target.value})} className="input-hero text-xs" placeholder="Arma" />
@@ -579,8 +578,8 @@
                                         </div>
                                         <div className="md:col-span-8 space-y-10 text-center">
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 leading-none">
-                                                <div className="glass-panel p-6 rounded-2xl text-center"><label className="text-[10px] uppercase text-red-500 block mb-4 italic font-black font-magic leading-none">Vitalidade Máx</label><input type="number" value={formData.hpMax} onChange={e => setFormData({...formData, hpMax: Number(e.target.value), hp: Number(e.target.value)})} className="bg-transparent text-5xl font-magic text-red-500 text-center w-full outline-none leading-none font-black" /></div>
-                                                <div className="glass-panel p-6 rounded-2xl text-center"><label className="text-[10px] uppercase text-sky-500 block mb-4 italic font-black font-magic leading-none">Arcanismo Máx</label><input type="number" value={formData.slotsMax} onChange={e => setFormData({...formData, slotsMax: Number(e.target.value), slots: Number(e.target.value)})} className="bg-transparent text-5xl font-magic text-sky-400 text-center w-full outline-none leading-none font-black" /></div>
+                                                <div className="glass-panel p-6 rounded-2xl text-center"><label className="text-[10px] uppercase text-red-500 block mb-4 italic font-black font-magic leading-none tracking-widest">Vitalidade Máx</label><input type="number" value={formData.hpMax} onChange={e => setFormData({...formData, hpMax: Number(e.target.value), hp: Number(e.target.value)})} className="bg-transparent text-5xl font-magic text-red-500 text-center w-full outline-none leading-none font-black" /></div>
+                                                <div className="glass-panel p-6 rounded-2xl text-center"><label className="text-[10px] uppercase text-sky-500 block mb-4 italic font-black font-magic leading-none tracking-widest">Arcanismo Máx</label><input type="number" value={formData.slotsMax} onChange={e => setFormData({...formData, slotsMax: Number(e.target.value), slots: Number(e.target.value)})} className="bg-transparent text-5xl font-magic text-sky-400 text-center w-full outline-none leading-none font-black" /></div>
                                             </div>
                                             <div className="grid grid-cols-6 gap-3 leading-none">
                                                 {['str','dex','con','int','wis','cha'].map(a => (<div key={a} className="space-y-2"><label className="text-[9px] uppercase text-slate-500 font-bold block leading-none">{a}</label><input type="number" value={formData[a]} onChange={e => setFormData({...formData, [a]: Number(e.target.value)})} className="input-hero py-3 font-magic text-xl text-center font-black" /><div className="text-[10px] font-black text-orange-500 leading-none italic">{getMod(formData[a])}</div></div>))}
@@ -609,7 +608,6 @@
             );
         }
 
-        // Sub-componentes auxiliares
         function EquipItem({ icon, label, value }) {
             return (
                 <div className="flex flex-col gap-1 leading-none">
