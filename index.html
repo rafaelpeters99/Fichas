@@ -130,7 +130,7 @@
                 plus: <g><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></g>,
                 "log-out": <g><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></g>,
                 "edit-3": <g><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></g>,
-                "trash-2": <g><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></g>,
+                "trash-2": <g><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 1 2 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></g>,
                 "scroll-text": <g><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M15 8h-5"/><path d="M15 12h-5"/></g>,
                 package: <g><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></g>,
                 sword: <g><polyline points="14.5 17.5 3 6 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></g>,
@@ -214,6 +214,32 @@
                 });
             };
 
+            // --- LÓGICA DE SALVAMENTO (JSON) ---
+            const exportData = () => {
+                const dataStr = JSON.stringify(characters, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `Grímorio_${roomName}_Backup.json`;
+                link.click();
+            };
+
+            const importData = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const imported = JSON.parse(event.target.result);
+                        setCharacters(imported);
+                        broadcastData(imported);
+                        alert("Sessão restaurada com sucesso!");
+                    } catch (err) { alert("Erro ao ler o ficheiro."); }
+                };
+                reader.readAsText(file);
+            };
+
             // --- LÓGICA DE DADOS ---
             const rollDice = (sides) => {
                 const myChars = characters.filter(c => c.ownerNickname?.toLowerCase().trim() === nickname.toLowerCase().trim());
@@ -222,7 +248,6 @@
                 const targetId = myChars[0]?.id;
                 const timestamp = Date.now();
 
-                // 1. Mostrar estado de "Rodando"
                 const listWithSpin = characters.map(c => {
                     if (c.id === targetId || (role === 'gm' && c.ownerNickname === 'Mestre')) {
                         return { ...c, isRolling: true, lastRoll: null };
@@ -232,7 +257,6 @@
                 setCharacters(listWithSpin);
                 broadcastData(listWithSpin);
 
-                // 2. Esperar animação e mostrar resultado
                 setTimeout(() => {
                     const result = Math.floor(Math.random() * sides) + 1;
                     const newList = characters.map(c => {
@@ -245,7 +269,6 @@
                     setCharacters(newList);
                     broadcastData(newList);
 
-                    // 3. Limpar overlay após 5 segundos
                     setTimeout(() => {
                         setCharacters(prev => prev.map(c => {
                             if (c.lastRoll?.time === timestamp) {
@@ -281,6 +304,12 @@
                 broadcastData(newList);
             };
 
+            const toggleVisibility = (id) => {
+                const newList = characters.map(c => c.id === id ? { ...c, isHidden: !c.isHidden } : c);
+                setCharacters(newList);
+                broadcastData(newList);
+            };
+
             const sortedChars = useMemo(() => {
                 const list = role === 'gm' ? characters : characters.filter(c => !c.isHidden || c.ownerNickname?.toLowerCase().trim() === nickname.toLowerCase().trim());
                 return [...list].sort((a, b) => {
@@ -294,12 +323,13 @@
 
             const selectedStoryChar = useMemo(() => characters.find(c => c.id === storyCharId), [characters, storyCharId]);
 
+            // --- VIEWS ---
             if (!isLoggedIn) {
                 return (
                     <div className="min-h-screen flex items-center justify-center p-6 animate-in">
                         <div className="glass-panel p-10 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl">
                             <Icon name="shield" size={48} className="text-orange-500 mb-6 mx-auto" />
-                            <h1 className="text-4xl font-magic font-black uppercase mb-10 text-white leading-none">Grimoire</h1>
+                            <h1 className="text-4xl font-magic font-black uppercase mb-10 text-white">Grimoire</h1>
                             {!showGmLogin ? (
                                 <form onSubmit={(e) => { e.preventDefault(); if(nickname.trim()){ localStorage.setItem('rpg_nickname', nickname.trim()); setIsLoggedIn(true); } }} className="space-y-6">
                                     <input type="text" value={nickname} onChange={e => setNickname(e.target.value)} placeholder="Teu Nickname" className="input-hero py-4 text-center font-bold" />
@@ -323,7 +353,7 @@
                     <div className="max-w-[500px] mx-auto p-10 min-h-screen flex flex-col justify-center animate-in text-white">
                         <div className="flex justify-between items-center mb-10">
                             <h1 className="text-4xl font-magic font-black uppercase tracking-widest leading-none">Salas</h1>
-                            <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="p-3 glass-panel rounded-xl text-slate-500 hover:text-red-500"><Icon name="log-out" size={20}/></button>
+                            <button onClick={() => { localStorage.clear(); window.location.reload(); }} title="Sair da Conta" className="p-3 glass-panel rounded-xl text-slate-500 hover:text-red-500 transition-colors shadow-lg"><Icon name="log-out" size={20}/></button>
                         </div>
                         <div className="glass-panel p-8 rounded-3xl space-y-6 border border-white/5 shadow-2xl">
                             <input type="text" value={roomName} onChange={e => setRoomName(e.target.value)} placeholder="Identificador da Mesa" className="input-hero py-4 text-center text-lg font-bold uppercase" />
@@ -340,15 +370,11 @@
             return (
                 <div className="max-w-[1600px] mx-auto p-4 md:p-12 lg:pl-32 animate-in min-h-screen">
                     
-                    {/* MENU DE DADOS MELHORADO (CANTINHO SÓ DELES) */}
+                    {/* MENU DE DADOS */}
                     <div className="dice-sidebar flex flex-col gap-4">
                         <div className="text-[8px] font-black uppercase text-orange-500/50 text-center mb-1 tracking-tighter">Rolagem</div>
                         {[4,6,8,10,12,20].map(s => (
-                            <button 
-                                key={s} 
-                                onClick={() => rollDice(s)} 
-                                className="w-12 h-12 bg-slate-900 border border-white/5 rounded-2xl flex flex-col items-center justify-center hover:border-orange-500 hover:scale-110 active:scale-95 transition-all group shadow-xl"
-                            >
+                            <button key={s} onClick={() => rollDice(s)} className="w-12 h-12 bg-slate-900 border border-white/5 rounded-2xl flex flex-col items-center justify-center hover:border-orange-500 hover:scale-110 active:scale-95 transition-all group shadow-xl">
                                 <span className="text-[10px] font-black leading-none mb-0.5 text-white">D{s}</span>
                                 <Icon name="d20" size={14} className="opacity-40 text-orange-500 group-hover:opacity-100 transition-opacity" />
                             </button>
@@ -361,7 +387,16 @@
                             <div><h1 className="text-3xl font-magic font-black uppercase text-white leading-none">{roomName}</h1><p className="text-[10px] uppercase text-slate-500 mt-1 italic tracking-widest">{nickname}</p></div>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={() => window.location.reload()} className="p-4 glass-panel rounded-xl text-slate-500 hover:text-red-500 transition-all font-black text-[10px] uppercase">Sair</button>
+                            {role === 'gm' && (
+                                <>
+                                    <button onClick={exportData} title="Guardar em ficheiro" className="p-4 glass-panel rounded-xl text-emerald-500 hover:bg-emerald-500/10 transition-all flex items-center gap-2 font-black text-[10px] uppercase"><Icon name="download" size={16}/> Arquivar</button>
+                                    <label title="Carregar de ficheiro" className="p-4 glass-panel rounded-xl text-sky-500 hover:bg-sky-500/10 transition-all flex items-center gap-2 font-black text-[10px] uppercase cursor-pointer">
+                                        <Icon name="upload" size={16}/> Restaurar
+                                        <input type="file" accept=".json" className="hidden" onChange={importData} />
+                                    </label>
+                                </>
+                            )}
+                            <button onClick={() => window.location.reload()} className="p-4 glass-panel rounded-xl text-slate-500 hover:text-red-500 transition-all font-black text-[10px] uppercase">Sair da Sala</button>
                         </div>
                     </header>
 
@@ -377,18 +412,15 @@
                                         {char.imageUrl ? <img src={char.imageUrl} className="w-full h-full object-cover" /> : <div className="h-full flex items-center justify-center opacity-10"><Icon name="user" size={64} className="text-white"/></div>}
                                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent group-hover/photo:opacity-0 transition-opacity duration-500"></div>
                                         
-                                        {/* BOTÃO HISTÓRICO ROLAGENS */}
                                         {hasAccess && (
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); setVisibleHistoryId(visibleHistoryId === char.id ? null : char.id); }}
                                                 className="absolute top-4 right-4 z-50 p-2 bg-black/40 hover:bg-orange-600 text-white rounded-full backdrop-blur-md transition-all shadow-lg border border-white/10"
-                                                title="Histórico de Rolagens"
                                             >
                                                 <Icon name="history" size={16} />
                                             </button>
                                         )}
 
-                                        {/* PAINEL DE HISTÓRICO */}
                                         {visibleHistoryId === char.id && (
                                             <div className="absolute top-14 right-4 z-[60] glass-panel p-4 rounded-2xl w-48 shadow-2xl border-orange-500/30 animate-in text-white overflow-hidden">
                                                 <div className="flex justify-between items-center mb-3 border-b border-white/10 pb-2">
@@ -401,18 +433,15 @@
                                                             <span className="text-[8px] font-black opacity-40 uppercase italic">{h.type}</span>
                                                             <span className="text-sm font-magic font-black text-orange-400">{h.val}</span>
                                                         </div>
-                                                    )) : <div className="text-center text-[10px] opacity-20 italic py-4">Sem rolagens...</div>}
+                                                    )) : <div className="text-center text-[10px] opacity-20 italic py-4">Vazio.</div>}
                                                 </div>
                                             </div>
                                         )}
                                         
-                                        {/* OVERLAY DE DADO */}
                                         {(char.isRolling || char.lastRoll) && (
                                             <div className="absolute inset-0 flex items-center justify-center z-[40] pointer-events-none">
                                                 <div className={`dice-roll-anim ${char.isRolling ? 'dice-spin-active' : ''} bg-orange-600/90 text-white w-24 h-24 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(234,88,12,0.6)] border-4 border-white`}>
-                                                    {char.isRolling ? (
-                                                        <Icon name="d20" size={40} className="animate-pulse" />
-                                                    ) : (
+                                                    {char.isRolling ? <Icon name="d20" size={40} className="animate-pulse" /> : (
                                                         <>
                                                             <span className="text-[10px] font-black uppercase leading-none mb-1">{char.lastRoll.type}</span>
                                                             <span className="text-4xl font-magic font-black leading-none">{char.lastRoll.val}</span>
@@ -432,19 +461,19 @@
                                         </button>
                                     </div>
 
-                                    <div className="p-8">
-                                        <div className="flex justify-between items-start mb-10 gap-4 leading-none text-white">
+                                    <div className="p-8 text-white">
+                                        <div className="flex justify-between items-start mb-10 gap-4 leading-none">
                                             <div className="flex-1 min-w-0">
                                                 <h3 className="text-3xl font-magic font-black uppercase italic leading-none truncate">{char.name}</h3>
                                                 <p className="text-[10px] font-black uppercase tracking-widest mt-2 opacity-50 italic">{char.ownerNickname} • Nível {char.level}</p>
                                             </div>
-                                            <div className="flex gap-2">
+                                            <div className="flex gap-2 leading-none">
                                                 {role === 'gm' && (
-                                                    <button onClick={() => toggleVisibility(char.id)} title={char.isHidden ? "Mostrar" : "Ocultar"} className={`p-3 rounded-xl border transition-all ${char.isHidden ? 'bg-purple-900/40 border-purple-500/30 text-purple-400' : 'glass-panel text-slate-400 hover:text-white'}`}>
+                                                    <button onClick={() => toggleVisibility(char.id)} title="Visibilidade" className={`p-3 rounded-xl border transition-all ${char.isHidden ? 'bg-purple-900/40 border-purple-500/30 text-purple-400' : 'glass-panel text-slate-400 hover:text-white'}`}>
                                                         <Icon name={char.isHidden ? "eye-off" : "eye"} size={18} />
                                                     </button>
                                                 )}
-                                                {hasAccess && <button onClick={() => { setEditingId(char.id); setFormData(char); }} className="p-3 glass-panel rounded-xl text-orange-500 hover:bg-orange-500/10"><Icon name="edit-3" size={18}/></button>}
+                                                {hasAccess && <button onClick={() => { setEditingId(char.id); setFormData(char); }} className="p-3 glass-panel rounded-xl text-orange-500 hover:bg-orange-500/10 transition-colors shadow-inner"><Icon name="edit-3" size={18}/></button>}
                                                 {role === 'gm' && <button onClick={() => deleteChar(char.id)} className="p-3 glass-panel rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"><Icon name="trash-2" size={18}/></button>}
                                             </div>
                                         </div>
@@ -465,15 +494,13 @@
                                                         </div>
                                                     ))}
                                                 </div>
-
                                                 <button onClick={() => setExpandedCards(p => ({...p, [char.id]: !p[char.id]}))} className={`w-full p-4 rounded-2xl font-magic font-black uppercase text-[9px] tracking-[0.3em] transition-all flex justify-between items-center ${isExpanded ? 'bg-orange-600 text-white shadow-xl shadow-orange-900/20' : 'glass-panel text-slate-500'}`}>
                                                     <span>Inventário & Saberes</span> <span>{isExpanded ? '▲' : '▼'}</span>
                                                 </button>
-                                                
                                                 {isExpanded && (
                                                     <div className="grid grid-cols-1 gap-6 animate-in">
                                                         <div className="glass-panel p-6 rounded-2xl bg-slate-900/40 text-left">
-                                                            <h4 className="text-[9px] font-black text-orange-500 uppercase mb-4 tracking-widest italic font-magic leading-none">Equipamento</h4>
+                                                            <h4 className="text-[9px] font-black text-orange-500 uppercase mb-4 tracking-widest italic font-magic leading-none">Equipamento Ativo</h4>
                                                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                                                 <EquipItem icon="sword" label="Arma" value={char.weapon} />
                                                                 <EquipItem icon="shield" label="Armadura" value={char.armor} />
@@ -495,7 +522,7 @@
                         })}
                         <button onClick={() => { setFormData({ name: "", hp: 10, hpMax: 10, slots: 2, slotsMax: 2, str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, level: 1, ownerNickname: role === 'gm' ? "" : nickname, isHidden: false, history: "", skills: "", abilities: "", inventory: "", weapon: "", armor: "", accessory: "", imageUrl: "" }); setEditingId('new'); }} className="glass-panel border-dashed border-2 border-slate-800 rounded-[3rem] p-20 flex flex-col items-center justify-center gap-4 text-slate-700 hover:text-orange-500 hover:border-orange-500/40 transition-all group min-h-[300px]">
                             <Icon name="plus" size={48} />
-                            <span className="font-magic uppercase font-black text-xs tracking-widest italic leading-none">Invocar Viajante</span>
+                            <span className="font-magic uppercase font-black text-xs tracking-widest italic">Invocar Viajante</span>
                         </button>
                     </div>
 
